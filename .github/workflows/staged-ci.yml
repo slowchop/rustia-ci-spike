@@ -1,0 +1,137 @@
+name: Staged CI spike
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      fail_stage:
+        description: Optional stage to fail
+        required: false
+        type: choice
+        options:
+          - none
+          - stage-1
+          - stage-2
+          - stage-3
+        default: none
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staged-ci
+  cancel-in-progress: false
+
+jobs:
+  stage-1-integrity:
+    name: Stage 1 / integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check immutable candidate inputs
+        run: |
+          sleep 2
+          test "${{ inputs.fail_stage }}" != "stage-1"
+          [[ "${{ github.event.head_commit.message }}" != *"[fail-stage-1]"* ]]
+
+  stage-1-quick:
+    name: Stage 1 / quick signal
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run quick checks
+        run: sleep 3
+
+  stage-1:
+    name: Stage 1
+    if: always()
+    needs: [stage-1-integrity, stage-1-quick]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every Stage 1 job
+        env:
+          INTEGRITY: ${{ needs.stage-1-integrity.result }}
+          QUICK: ${{ needs.stage-1-quick.result }}
+        run: test "$INTEGRITY" = success -a "$QUICK" = success
+
+  stage-2-native:
+    name: Stage 2 / native runtime
+    needs: stage-1
+    runs-on: ubuntu-latest
+    steps:
+      - run: sleep 2
+
+  stage-2-wasm:
+    name: Stage 2 / Wasm runtime
+    needs: stage-1
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run portable runtime
+        run: |
+          sleep 4
+          test "${{ inputs.fail_stage }}" != "stage-2"
+          [[ "${{ github.event.head_commit.message }}" != *"[fail-stage-2]"* ]]
+
+  stage-2-browser:
+    name: Stage 2 / browser runtime
+    needs: stage-1
+    runs-on: ubuntu-latest
+    steps:
+      - run: sleep 5
+
+  stage-2:
+    name: Stage 2
+    if: always()
+    needs: [stage-1, stage-2-native, stage-2-wasm, stage-2-browser]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require Stage 1 and every Stage 2 job
+        env:
+          PREVIOUS: ${{ needs.stage-1.result }}
+          NATIVE: ${{ needs.stage-2-native.result }}
+          WASM: ${{ needs.stage-2-wasm.result }}
+          BROWSER: ${{ needs.stage-2-browser.result }}
+        run: test "$PREVIOUS" = success -a "$NATIVE" = success -a "$WASM" = success -a "$BROWSER" = success
+
+  stage-3-workspace:
+    name: Stage 3 / workspace
+    needs: stage-2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run full workspace
+        run: |
+          sleep 6
+          test "${{ inputs.fail_stage }}" != "stage-3"
+          [[ "${{ github.event.head_commit.message }}" != *"[fail-stage-3]"* ]]
+
+  stage-3-release:
+    name: Stage 3 / release
+    needs: stage-2
+    runs-on: ubuntu-latest
+    steps:
+      - run: sleep 7
+
+  stage-3:
+    name: Stage 3
+    if: always()
+    needs: [stage-2, stage-3-workspace, stage-3-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require Stage 2 and every Stage 3 job
+        env:
+          PREVIOUS: ${{ needs.stage-2.result }}
+          WORKSPACE: ${{ needs.stage-3-workspace.result }}
+          RELEASE: ${{ needs.stage-3-release.result }}
+        run: test "$PREVIOUS" = success -a "$WORKSPACE" = success -a "$RELEASE" = success
+
+  bulk:
+    name: Bulk
+    if: always()
+    needs: [stage-1, stage-2, stage-3]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish one authoritative result
+        env:
+          STAGE_1: ${{ needs.stage-1.result }}
+          STAGE_2: ${{ needs.stage-2.result }}
+          STAGE_3: ${{ needs.stage-3.result }}
+        run: test "$STAGE_1" = success -a "$STAGE_2" = success -a "$STAGE_3" = success

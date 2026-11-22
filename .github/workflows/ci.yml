@@ -1,0 +1,28 @@
+name: CI Spike
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quick:
+    name: Quick
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record quick admission
+        run: echo "quick check for $GITHUB_SHA"
+
+  bulk:
+    name: Bulk
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hold the merge group briefly
+        run: |
+          echo "bulk check for $GITHUB_SHA"
+          sleep 20

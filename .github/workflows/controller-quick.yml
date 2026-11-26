@@ -1,0 +1,49 @@
+name: Controller Quick canary
+run-name: rustia-quick:${{ inputs.repository_id }}:${{ inputs.admission_id }}:${{ inputs.checkout_sha }}:${{ inputs.quick_intent_digest }}
+
+"on":
+  workflow_dispatch:
+    inputs:
+      repository_id:
+        required: true
+        type: string
+      admission_id:
+        required: true
+        type: string
+      pull_request:
+        required: true
+        type: string
+      head_repository_id:
+        required: true
+        type: string
+      head_repository_full_name:
+        required: true
+        type: string
+      checkout_sha:
+        required: true
+        type: string
+      quick_intent_digest:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  integrity:
+    name: integrity
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.head_repository_full_name }}
+          ref: ${{ inputs.checkout_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify exact checkout
+        env:
+          EXPECTED_CHECKOUT_SHA: ${{ inputs.checkout_sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_CHECKOUT_SHA"

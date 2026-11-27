@@ -1,0 +1,28 @@
+name: Controller merge event canary
+
+"on":
+  merge_group:
+    types: [checks_requested]
+
+permissions: {}
+
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Retain only the repository ID and merge-group SHAs
+        run: |
+          jq -e '{
+            action: .action,
+            repository: {id: .repository.id},
+            merge_group: {head_sha: .merge_group.head_sha, base_sha: .merge_group.base_sha}
+          } | select(.action == "checks_requested" and .repository.id == 1467973729)' \
+            "$GITHUB_EVENT_PATH" > merge-group.json
+      - name: Upload sanitized merge-group event
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: merge-group-event
+          path: merge-group.json
+          if-no-files-found: error
+          retention-days: 1

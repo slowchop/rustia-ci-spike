@@ -1,0 +1,1 @@
+Independent input A for the controller canary.
